@@ -9,8 +9,8 @@ My first big milestone is analyzing all of my available games from the Chess.com
 in my games (FEN representation). This will help me improve as I progress in the London System, with the white pieces,
 and a Scandanavian variation (1. e4 d5 2. exd5 Nf6), with the black pieces.
 
-So far, I have set up an architecture in Go to hit various Chess.com endpoints (namely `*https://api.chess.com/pub/player/*{username}*/games/archives*`
-and `*https://api.chess.com/pub/player/*{username}**/games/*{YYYY}/{MM}`), process the data, and send it to a PostgreSQL database hosted in a Docker container.
+So far, I have set up an architecture in Go to hit various Chess.com endpoints (namely `https://api.chess.com/pub/player/{username}/games/archives`
+and `https://api.chess.com/pub/player/{username}/games/*{YYYY}/{MM}`), process the data, and send it to a PostgreSQL database hosted in a Docker container.
 
 The next steps, in no particular order, are:
 1. Setup a Go API to retrieve game data
