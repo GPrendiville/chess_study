@@ -23,7 +23,10 @@ func Connection() {
 		log.Fatal(err)
 	}
 
-	Archive := chesscom.Contact()
+	Archive := chesscom.PingArchive()
 
 	Archive.Endpoints = addNewArchives(db, Archive)
+
+	AddNewGames(db, Archive.Endpoints)
+
 }

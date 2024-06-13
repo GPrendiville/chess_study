@@ -11,17 +11,8 @@ import (
 func addNewArchives(db *sql.DB, archives chesscom.EndpointArchive) []string {
 	var id int
 
-	if checkArchivesData(db) {
-		lastEndpointQuery := `SELECT id
-		FROM archives
-		ORDER BY id DESC
-		LIMIT 1`
-
-		err := db.QueryRow(lastEndpointQuery).Scan(&id)
-		if err != nil {
-			fmt.Println("GET LAST ENDPOINT ERROR")
-			log.Fatal(err)
-		}
+	if checkArchiveTable(db) {
+		id = lastArchiveEntry(db)
 	}
 
 	for i := id; i < len(archives.Endpoints); i++ {
@@ -33,6 +24,23 @@ func addNewArchives(db *sql.DB, archives chesscom.EndpointArchive) []string {
 	}
 
 	return archives.Endpoints[id:]
+}
+
+func lastArchiveEntry(db *sql.DB) int {
+	var id int
+
+	lastEndpointQuery := `SELECT id
+		FROM archives
+		ORDER BY id DESC
+		LIMIT 1`
+
+	err := db.QueryRow(lastEndpointQuery).Scan(&id)
+	if err != nil {
+		fmt.Println("GET LAST ENDPOINT ERROR")
+		log.Fatal(err)
+	}
+
+	return id
 }
 
 func insertEndpoint(db *sql.DB, endpoint string) {
@@ -47,7 +55,7 @@ func insertEndpoint(db *sql.DB, endpoint string) {
 	_ = result
 }
 
-func checkArchivesData(db *sql.DB) bool {
+func checkArchiveTable(db *sql.DB) bool {
 	var check bool
 	query := `SELECT EXISTS(SELECT 1 FROM archives)`
 
