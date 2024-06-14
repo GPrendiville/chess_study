@@ -68,3 +68,5 @@ func insertGame(db *sql.DB, url string, pgn string, timecontrol string, myrating
 	}
 	_ = result
 }
+
+func GetGames()
