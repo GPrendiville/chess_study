@@ -27,6 +27,7 @@ func (api *APIServer) InitalizeAPI() error {
 		api.db,
 	}
 	router.HandleFunc("GET /archives", db.GetArchives)
+	router.HandleFunc("GET /update", db.Update)
 
 	server := http.Server{
 		Addr:    api.APIEndpoint,

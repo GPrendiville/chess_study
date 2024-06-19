@@ -1,9 +1,12 @@
 package api
 
 import (
+	"chess-study/chesscom"
 	"encoding/json"
 	"log"
 	"net/http"
+
+	"chess-study/dockpg"
 )
 
 type TotalArchives struct {
@@ -17,7 +20,6 @@ type Archive struct {
 
 func (db *Database) GetArchives(w http.ResponseWriter, r *http.Request) {
 	archives := TotalArchives{Archives: []Archive{}}
-	// make([]Archive, 0)
 
 	archivesQuery := `SELECT *
 		FROM archives`
@@ -44,4 +46,40 @@ func (db *Database) GetArchives(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(archives)
 
+}
+
+func (db *Database) UpdateArchives(w http.ResponseWriter, r *http.Request) {
+	Archive := chesscom.PingArchive()
+
+	Archive.Endpoints = dockpg.AddNewArchives(db.DB, Archive)
+
+	newGames := dockpg.AddNewGames(db.DB, Archive.Endpoints)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(newGames)
+}
+
+func (db *Database) UpdateGames(w http.ResponseWriter, r *http.Request) {
+	Archive := chesscom.PingArchive()
+
+	Archive.Endpoints = dockpg.AddNewArchives(db.DB, Archive)
+
+	newGames := dockpg.AddNewGames(db.DB, Archive.Endpoints)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(newGames)
+}
+
+func (db *Database) Update(w http.ResponseWriter, r *http.Request) {
+	Archive := chesscom.PingArchive()
+
+	Archive.Endpoints = dockpg.AddNewArchives(db.DB, Archive)
+
+	newGames := dockpg.AddNewGames(db.DB, Archive.Endpoints)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(newGames)
 }

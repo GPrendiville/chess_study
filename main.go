@@ -2,7 +2,7 @@ package main
 
 import (
 	"chess-study/api"
-	"database/sql"
+	"chess-study/dockpg"
 	"log"
 	"os"
 
@@ -11,19 +11,11 @@ import (
 )
 
 func main() {
-	// dockpg.Connection()
-
-	connect := os.Getenv("POSTGRES_CONNECT")
-
-	db, err := sql.Open("postgres", connect)
+	db := dockpg.Connection()
 
 	defer db.Close()
 
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if err = db.Ping(); err != nil {
+	if err := db.Ping(); err != nil {
 		log.Fatal(err)
 	}
 

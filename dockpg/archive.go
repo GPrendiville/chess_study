@@ -8,7 +8,7 @@ import (
 	"chess-study/chesscom"
 )
 
-func addNewArchives(db *sql.DB, archives chesscom.EndpointArchive) []string {
+func AddNewArchives(db *sql.DB, archives chesscom.EndpointArchive) []string {
 	var id int
 
 	if checkArchiveTable(db) {
