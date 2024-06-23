@@ -11,6 +11,7 @@ type GamesFromMonth struct {
 type Game struct {
 	URL         string   `json:"url"`
 	PGN         string   `json:"pgn"`
+	RULES       string   `json:"rules"`
 	Accuracies  Accuracy `json:"accuracies"`
 	FEN         string   `json:"fen"`
 	TimeControl string   `json:"time_class"`

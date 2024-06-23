@@ -3,9 +3,11 @@ package dockpg
 import (
 	"chess-study/chesscom"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 )
 
 var url string
@@ -18,6 +20,7 @@ var fen string
 var myresult string
 var oppresult string
 var accuracy float64
+var rules string
 
 type AddedGames struct {
 	Games []AddedGame `json:"games"`
@@ -29,18 +32,35 @@ type AddedGame struct {
 	Color bool   `json:"color"`
 }
 
+type ToPython struct {
+	Pgn   string `json:"pgn"`
+	Rules string `json:"rules"`
+	Color bool   `json:"color"`
+}
+
+type Counts struct {
+	Counts []FenCount `json:"counts"`
+}
+
+type FenCount struct {
+	Fen   string `json:"fen"`
+	Count int    `json:"count"`
+}
+
 func AddNewGames(db *sql.DB, months []string) AddedGames {
 	addedGames := AddedGames{Games: []AddedGame{}}
 	lastGame := getLastGame(db)
 
 	for monthEntry := range months {
 		games := chesscom.PingMonth(months[monthEntry]).Games
+		print(len(games))
 
 		for i := 0; i < len(games); i++ {
 			if games[i].URL != lastGame {
 				url = games[i].URL
 				pgn = games[i].PGN
 				timecontrol = games[i].TimeControl
+				rules = games[i].RULES
 				fen = games[i].FEN
 				color = determineColor(games[i])
 
@@ -62,6 +82,23 @@ func AddNewGames(db *sql.DB, months []string) AddedGames {
 
 				if game.Url != "" && game.Pgn != "" {
 					addedGames.Games = append(addedGames.Games, game)
+
+					args, err := json.Marshal(ToPython{Pgn: pgn, Rules: rules, Color: color})
+
+					cmd := exec.Command("python3", "fenpy/compute.py", string(args))
+					out, err := cmd.CombinedOutput()
+					if err != nil {
+						log.Fatalf("Command execution failed: %s\nOutput: %s", err, out)
+					}
+
+					// fmt.Println("Output: ", string(out))
+
+					var responseObj Counts
+					if err := json.Unmarshal(out, &responseObj); err != nil {
+						log.Fatalf("Failed to unmarshal JSON: %s\nJSON: %s", err, out)
+					}
+					fmt.Println("INSERTING TO TABLES...")
+					pythonToFenAndBridge(db, responseObj, url)
 				}
 
 			}
@@ -73,6 +110,29 @@ func AddNewGames(db *sql.DB, months []string) AddedGames {
 
 func determineColor(game chesscom.Game) bool {
 	return game.White.Username == os.Getenv("USERNAME")
+}
+
+func pythonToFenAndBridge(db *sql.DB, counts Counts, url string) {
+	for _, fens := range counts.Counts {
+		countQuery := `INSERT INTO counts (fen, count)
+		VALUES ($1, $2)
+		ON CONFLICT (fen) DO UPDATE SET count = counts.count + 1`
+
+		bridgeQuery := `INSERT INTO bridge (link, fen)
+		VALUES ($1, $2)`
+
+		_, err := db.Exec(countQuery, fens.Fen, fens.Count)
+		if err != nil {
+			fmt.Println("COUNTS TABLE ERROR")
+			log.Fatal(err)
+		}
+
+		_, err = db.Exec(bridgeQuery, url, fens.Fen)
+		if err != nil {
+			fmt.Println("BRIDGE TABLE ERROR")
+			log.Fatal(err)
+		}
+	}
 }
 
 func getLastGame(db *sql.DB) string {
@@ -123,7 +183,5 @@ func insertGame(db *sql.DB, url string, pgn string, timecontrol string, myrating
 		return AddedGame{"", "", false}
 	}
 
-	fmt.Println(ourl)
-
-	return AddedGame{ourl, opgn, ocolor}
+	return AddedGame{Url: ourl, Pgn: opgn, Color: ocolor}
 }

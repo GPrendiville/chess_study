@@ -3,7 +3,6 @@ import json
 import re
 from dataclasses import dataclass
 import chess
-import requests
 import os
 from dotenv import load_dotenv
 from collections import Counter
@@ -73,33 +72,27 @@ def gen_fen(game, color):
 
 
 def counting_fens(data):
-    games = []
+    pgn = data['pgn']
+    rules = data['rules']
+    color = data['color']
     counts = Counter()
-    counted = {'fencounts': []}
+    counted = {'counts': []}
 
     # moves = extract_moves(pgn)
     # fens = gen_fen(moves, False)
 
     ####### NEEEEEEEEEEED RULES TO AVOID CHESS960
 
-    for game in data['games']:
-        if game['rules'] != 'chess':
-            continue
-        games.append(Game(game['pgn'], (game['white']['username'] == 'C4DDY903')))
-
-    for game in games:
-        counts.update(gen_fen(extract_moves(game.pgn), game.color))
+    if rules == 'chess':
+        counts.update(gen_fen(extract_moves(pgn), color))
 
     for position in counts:
-        if (counts[position] > 4):
-            counted['fencounts'].append({'fen': position, 'count': counts[position]})
+        counted['counts'].append({'fen': position, 'count': counts[position]})
 
     return counted
 
 r =  sys.argv[1]
-# header = {'User-Agent': 'griffithprendiville@gmail.com'}
-# requests.get("https://api.chess.com/pub/player/c4ddy903/games/2024/06", headers=header).json()
-# r.json()
+
 data = json.loads(r)
 
 out = counting_fens(data)
