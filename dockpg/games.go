@@ -21,6 +21,7 @@ var myresult string
 var oppresult string
 var accuracy float64
 var rules string
+var initial string
 
 type AddedGames struct {
 	Games []AddedGame `json:"games"`
@@ -47,13 +48,13 @@ type FenCount struct {
 	Count int    `json:"count"`
 }
 
-func AddNewGames(db *sql.DB, months []string) AddedGames {
-	addedGames := AddedGames{Games: []AddedGame{}}
+func AddNewGames(db *sql.DB, months []string) int {
+	addedGames := 0
 	lastGame := getLastGame(db)
 
 	for monthEntry := range months {
 		games := chesscom.PingMonth(months[monthEntry]).Games
-		print(len(games))
+		// fmt.Printf("url: %s\nNum of games: %d\n\n", months[monthEntry], len(games))
 
 		for i := 0; i < len(games); i++ {
 			if games[i].URL != lastGame {
@@ -63,6 +64,7 @@ func AddNewGames(db *sql.DB, months []string) AddedGames {
 				rules = games[i].RULES
 				fen = games[i].FEN
 				color = determineColor(games[i])
+				initial = games[i].Initial
 
 				if color {
 					myrating = games[i].White.Rating
@@ -78,27 +80,28 @@ func AddNewGames(db *sql.DB, months []string) AddedGames {
 					accuracy = games[i].Accuracies.Black
 				}
 
-				game := insertGame(db, url, pgn, timecontrol, myrating, opprating, color, fen, myresult, oppresult, accuracy)
+				if initial == "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" {
+					game := insertGame(db, url, pgn, timecontrol, myrating, opprating, color, fen, myresult, oppresult, accuracy)
 
-				if game.Url != "" && game.Pgn != "" {
-					addedGames.Games = append(addedGames.Games, game)
+					if game.Url != "" && game.Pgn != "" {
+						addedGames++
 
-					args, err := json.Marshal(ToPython{Pgn: pgn, Rules: rules, Color: color})
+						args, err := json.Marshal(ToPython{Pgn: pgn, Rules: rules, Color: color})
 
-					cmd := exec.Command("python3", "fenpy/compute.py", string(args))
-					out, err := cmd.CombinedOutput()
-					if err != nil {
-						log.Fatalf("Command execution failed: %s\nOutput: %s", err, out)
+						cmd := exec.Command("python3", "fenpy/compute.py", string(args))
+						out, err := cmd.CombinedOutput()
+						if err != nil {
+							log.Fatalf("Command execution failed: %s\nOutput: %s", err, out)
+						}
+
+						// fmt.Println("Output: ", string(out))
+
+						var responseObj Counts
+						if err := json.Unmarshal(out, &responseObj); err != nil {
+							log.Fatalf("Failed to unmarshal JSON: %s\nJSON: %s", err, out)
+						}
+						pythonToFenAndBridge(db, responseObj, url)
 					}
-
-					// fmt.Println("Output: ", string(out))
-
-					var responseObj Counts
-					if err := json.Unmarshal(out, &responseObj); err != nil {
-						log.Fatalf("Failed to unmarshal JSON: %s\nJSON: %s", err, out)
-					}
-					fmt.Println("INSERTING TO TABLES...")
-					pythonToFenAndBridge(db, responseObj, url)
 				}
 
 			}

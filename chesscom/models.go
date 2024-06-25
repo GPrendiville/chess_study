@@ -17,6 +17,7 @@ type Game struct {
 	TimeControl string   `json:"time_class"`
 	White       Player   `json:"white"`
 	Black       Player   `json:"black"`
+	Initial     string   `json:"initial_setup"`
 }
 
 type Accuracy struct {
