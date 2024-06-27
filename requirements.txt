@@ -1,0 +1,2 @@
+python-chess==1.999 # Replace with the actual installed version
+python-dotenv==1.0.1  # Replace with the actual installed version

@@ -10,7 +10,8 @@ import (
 )
 
 func PingArchive() EndpointArchive {
-	response, err := http.Get(os.Getenv("CHESS_COM"))
+	url := "https://api.chess.com/pub/player/" + os.Getenv("USERNAME") + "/games/archives"
+	response, err := http.Get(url)
 	if err != nil {
 		fmt.Print(err.Error())
 		os.Exit(1)

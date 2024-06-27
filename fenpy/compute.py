@@ -49,13 +49,13 @@ def gen_fen(game, color, pgn):
     group = []
 
     def return_fen():
-        return color == (board.ply() % 2 != 0)
+        return color == (board.ply() % 2 == 0)
 
     for move in game[0]:
         try:
             board.push_san(move.white)
             if return_fen() and board.ply() > 1:
-                group.append(board.fen().split(' ', 1)[0])
+                group.append(board.fen())
         except chess.IllegalMoveError:
             print(f"Illegal move found for white: {move.white} (pgn: {pgn})")
 
@@ -63,9 +63,9 @@ def gen_fen(game, color, pgn):
             try:
                 board.push_san(move.black)
                 if return_fen():
-                    group.append(board.fen().split(' ', 1)[0])
+                    group.append(board.fen())
             except chess.IllegalMoveError:
-                print(f"Illegal move found for black: {move.black} (Position: {game})")
+                print(f"Illegal move found for black: {move.black} (pgn: {pgn})")
 
     board.reset()
     return group
@@ -73,8 +73,6 @@ def gen_fen(game, color, pgn):
 
 def counting_fens(data):
     pgn = data['pgn']
-    rules = data['rules']
-    initial = data['initial']
     color = data['color']
     counts = Counter()
     counted = {'counts': []}
@@ -84,8 +82,7 @@ def counting_fens(data):
 
     ####### NEEEEEEEEEEED RULES TO AVOID CHESS960
 
-    if rules == 'chess':
-        counts.update(gen_fen(extract_moves(pgn), color, data['pgn']))
+    counts.update(gen_fen(extract_moves(pgn), color, data['pgn']))
 
     for position in counts:
         counted['counts'].append({'fen': position, 'count': counts[position]})

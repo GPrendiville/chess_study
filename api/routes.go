@@ -1,12 +1,12 @@
 package api
 
 import (
-	"chess-study/chesscom"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
-
-	"chess-study/dockpg"
+	"strconv"
+	"strings"
 )
 
 type TotalArchives struct {
@@ -14,14 +14,53 @@ type TotalArchives struct {
 }
 
 type Archive struct {
-	Id       int    `json:"id"`
-	Endpoint string `json:"endpoint"`
+	Month int `json:"month"`
+	Year  int `json:"year"`
+}
+
+func (db *Database) GetCounts(w http.ResponseWriter, r *http.Request) {
+	var months int
+	var games int
+	var positions int
+
+	tablesQuery := `SELECT n_live_tup
+	FROM pg_stat_user_tables;`
+
+	rows, err := db.DB.Query(tablesQuery)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	rows.Next()
+	if rows.Scan(&months); err != nil {
+		log.Fatal(err)
+	}
+	rows.Next()
+	if rows.Scan(&games); err != nil {
+		log.Fatal(err)
+	}
+	rows.Next()
+	if rows.Scan(&positions); err != nil {
+		log.Fatal(err)
+	}
+	rows.Close()
+
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	testingSentence := fmt.Sprintf("Months: %d\nGames: %d\nPositions: %d", months, games, positions)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(testingSentence)
+
 }
 
 func (db *Database) GetArchives(w http.ResponseWriter, r *http.Request) {
 	archives := TotalArchives{Archives: []Archive{}}
 
-	archivesQuery := `SELECT *
+	archivesQuery := `SELECT endpoint
 		FROM archives`
 
 	rows, err := db.DB.Query(archivesQuery)
@@ -30,12 +69,16 @@ func (db *Database) GetArchives(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for rows.Next() {
-		var id int
 		var endpoint string
-		if err = rows.Scan(&id, &endpoint); err != nil {
+		if err = rows.Scan(&endpoint); err != nil {
 			log.Fatal(err)
 		}
-		archives.Archives = append(archives.Archives, Archive{id, endpoint})
+		endpointArray := strings.Split(endpoint, "/")
+		endpointArrayLength := len(endpointArray)
+		month, _ := strconv.Atoi(endpointArray[endpointArrayLength-1])
+		year, _ := strconv.Atoi(endpointArray[endpointArrayLength-2])
+
+		archives.Archives = append(archives.Archives, Archive{month, year})
 	}
 
 	if err := rows.Err(); err != nil {
@@ -46,40 +89,4 @@ func (db *Database) GetArchives(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(archives)
 
-}
-
-func (db *Database) UpdateArchives(w http.ResponseWriter, r *http.Request) {
-	Archive := chesscom.PingArchive()
-
-	Archive.Endpoints = dockpg.AddNewArchives(db.DB, Archive)
-
-	newGames := dockpg.AddNewGames(db.DB, Archive.Endpoints)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(newGames)
-}
-
-func (db *Database) UpdateGames(w http.ResponseWriter, r *http.Request) {
-	Archive := chesscom.PingArchive()
-
-	Archive.Endpoints = dockpg.AddNewArchives(db.DB, Archive)
-
-	newGames := dockpg.AddNewGames(db.DB, Archive.Endpoints)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(newGames)
-}
-
-func (db *Database) Update(w http.ResponseWriter, r *http.Request) {
-	Archive := chesscom.PingArchive()
-
-	Archive.Endpoints = dockpg.AddNewArchives(db.DB, Archive)
-
-	newGames := dockpg.AddNewGames(db.DB, Archive.Endpoints)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(newGames)
 }
