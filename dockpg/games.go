@@ -24,7 +24,7 @@ var accuracy float64
 var initial string
 
 type AddedGames struct {
-	Games []AddedGame `json:"games"`
+	Games []ToPython `json:"games"`
 }
 
 type AddedGame struct {
@@ -36,6 +36,7 @@ type AddedGame struct {
 type ToPython struct {
 	Pgn   string `json:"pgn"`
 	Color bool   `json:"color"`
+	// Url string `json:"url"`
 }
 
 type Counts struct {
@@ -50,7 +51,7 @@ type FenCount struct {
 func AddNewGames(db *sql.DB, months []string) int {
 	defer helpers.Duration(helpers.Track("AddNewGame"))
 
-	addedGames := 0
+	addedGamesCount := 0
 	lastGame := getLastGame(db)
 
 	for monthEntry := range months {
@@ -85,7 +86,7 @@ func AddNewGames(db *sql.DB, months []string) int {
 				game := insertGame(db, url, pgn, timecontrol, myrating, opprating, color, fen, myresult, oppresult, accuracy)
 
 				if game.Url != "" && game.Pgn != "" {
-					addedGames++
+					addedGamesCount++
 
 					args, err := json.Marshal(ToPython{Pgn: pgn, Color: color})
 
@@ -111,7 +112,7 @@ func AddNewGames(db *sql.DB, months []string) int {
 			currentGame = games[currentIndex]
 		}
 	}
-	return addedGames
+	return addedGamesCount
 
 }
 

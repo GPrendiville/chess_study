@@ -44,6 +44,10 @@ def extract_moves(pgn):
 
     return [moves_arrs, list_of_moves, pgn_cleaned]
 
+def removeMoveClocks(fen):
+    elements = fen.split()
+    return ' '.join(elements[:4])
+
 def gen_fen(game, color, pgn):
     board = chess.Board()
     group = []
@@ -55,7 +59,7 @@ def gen_fen(game, color, pgn):
         try:
             board.push_san(move.white)
             if return_fen() and board.ply() > 1:
-                group.append(board.fen())
+                group.append(removeMoveClocks(board.fen()))
         except chess.IllegalMoveError:
             print(f"Illegal move found for white: {move.white} (pgn: {pgn})")
 
@@ -63,7 +67,7 @@ def gen_fen(game, color, pgn):
             try:
                 board.push_san(move.black)
                 if return_fen():
-                    group.append(board.fen())
+                    group.append(removeMoveClocks(board.fen()))
             except chess.IllegalMoveError:
                 print(f"Illegal move found for black: {move.black} (pgn: {pgn})")
 

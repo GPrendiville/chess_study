@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -16,6 +15,12 @@ type TotalArchives struct {
 type Archive struct {
 	Month int `json:"month"`
 	Year  int `json:"year"`
+}
+
+type Overview struct {
+	Months    int `json:"months"`
+	Games     int `json:"games"`
+	Positions int `json:"positions"`
 }
 
 func (db *Database) GetCounts(w http.ResponseWriter, r *http.Request) {
@@ -49,11 +54,11 @@ func (db *Database) GetCounts(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 
-	testingSentence := fmt.Sprintf("Months: %d\nGames: %d\nPositions: %d", months, games, positions)
+	tableCounts := Overview{months, games, positions}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(testingSentence)
+	json.NewEncoder(w).Encode(tableCounts)
 
 }
 
