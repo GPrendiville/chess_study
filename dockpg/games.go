@@ -6,9 +6,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 var url string
@@ -24,7 +26,7 @@ var accuracy float64
 var initial string
 
 type AddedGames struct {
-	Games []ToPython `json:"games"`
+	Games []AddedGame `json:"games"`
 }
 
 type AddedGame struct {
@@ -44,8 +46,9 @@ type Counts struct {
 }
 
 type FenCount struct {
-	Fen   string `json:"fen"`
-	Count int    `json:"count"`
+	Fen   string   `json:"fen"`
+	Count int      `json:"count"`
+	Urls  []string `json:"urls"`
 }
 
 func AddNewGames(db *sql.DB, months []string) int {
@@ -59,6 +62,7 @@ func AddNewGames(db *sql.DB, months []string) int {
 		// fmt.Printf("url: %s\nNum of games: %d\n\n", months[monthEntry], len(games))
 		currentIndex := len(games) - 1
 		currentGame := games[currentIndex]
+		gamesForFenGen := AddedGames{[]AddedGame{}}
 
 		for currentGame.URL != lastGame {
 			url = currentGame.URL
@@ -88,21 +92,8 @@ func AddNewGames(db *sql.DB, months []string) int {
 				if game.Url != "" && game.Pgn != "" {
 					addedGamesCount++
 
-					args, err := json.Marshal(ToPython{Pgn: pgn, Color: color})
+					gamesForFenGen.Games = append(gamesForFenGen.Games, game)
 
-					cmd := exec.Command("python3", "fenpy/compute.py", string(args))
-					out, err := cmd.CombinedOutput()
-					if err != nil {
-						log.Fatalf("Command execution failed: %s\nOutput: %s", err, out)
-					}
-
-					// fmt.Println("Output: ", string(out))
-
-					var responseObj Counts
-					if err := json.Unmarshal(out, &responseObj); err != nil {
-						log.Fatalf("Failed to unmarshal JSON: %s\nJSON: %s", err, out)
-					}
-					pythonToFenAndBridge(db, responseObj, url)
 				}
 			}
 			currentIndex = currentIndex - 1
@@ -111,35 +102,104 @@ func AddNewGames(db *sql.DB, months []string) int {
 			}
 			currentGame = games[currentIndex]
 		}
+
+		args, _ := json.Marshal(gamesForFenGen)
+
+		cmd := exec.Command("python3", "fenpy/compute.py")
+		stdinPipe, err := cmd.StdinPipe()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		go func() {
+			defer stdinPipe.Close()
+			io.WriteString(stdinPipe, string(args)) // `data` is the byte slice
+		}()
+
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Fatalf("Command execution failed: %s\nOutput: %s", err, out)
+		}
+
+		var responseObj Counts
+		if err := json.Unmarshal(out, &responseObj); err != nil {
+			log.Fatalf("Failed to unmarshal JSON: %s\nJSON: %s", err, out)
+		}
+
+		pythonToFenAndBridge(db, responseObj.Counts)
+
 	}
 	return addedGamesCount
-
 }
 
 func determineColor(game chesscom.Game) bool {
 	return game.White.Username == os.Getenv("USERNAME")
 }
 
-func pythonToFenAndBridge(db *sql.DB, counts Counts, url string) {
-	for _, fens := range counts.Counts {
-		countQuery := `INSERT INTO counts (fen, count)
-		VALUES ($1, $2)
-		ON CONFLICT (fen) DO UPDATE SET count = counts.count + 1`
+func pythonToFenAndBridge(db *sql.DB, data []FenCount) {
+	const maxParams = 65535
 
-		bridgeQuery := `INSERT INTO bridge (link, fen)
-		VALUES ($1, $2)`
+	var countValues []string
+	var countArgs []interface{}
+	var bridgeValues []string
+	var bridgeArgs []interface{}
+	countIdx, bridgeIdx := 1, 1
 
-		_, err := db.Exec(countQuery, fens.Fen, fens.Count)
-		if err != nil {
-			fmt.Println("COUNTS TABLE ERROR")
-			log.Fatal(err)
+	for _, entry := range data {
+		if len(countArgs)+len(bridgeArgs)+len(entry.Urls)*2+2 > maxParams {
+			// Execute batch
+			executeBatch(db, countValues, countArgs, bridgeValues, bridgeArgs)
+			countValues, countArgs, bridgeValues, bridgeArgs = nil, nil, nil, nil
+			countIdx, bridgeIdx = 1, 1
 		}
 
-		_, err = db.Exec(bridgeQuery, url, fens.Fen)
-		if err != nil {
-			fmt.Println("BRIDGE TABLE ERROR")
-			log.Fatal(err)
+		// Append data for counts
+		countValues = append(countValues, fmt.Sprintf("($%d, $%d)", countIdx, countIdx+1))
+		countArgs = append(countArgs, entry.Fen, entry.Count)
+		countIdx += 2
+
+		// Handle multiple URLs for each FEN
+		for _, url := range entry.Urls {
+			bridgeValues = append(bridgeValues, fmt.Sprintf("($%d, $%d)", bridgeIdx, bridgeIdx+1))
+			bridgeArgs = append(bridgeArgs, url, entry.Fen)
+			bridgeIdx += 2
 		}
+	}
+
+	if len(countArgs) > 0 || len(bridgeArgs) > 0 {
+		executeBatch(db, countValues, countArgs, bridgeValues, bridgeArgs)
+	}
+}
+
+func executeBatch(db *sql.DB, countValues []string, countArgs []interface{}, bridgeValues []string, bridgeArgs []interface{}) {
+
+	countQuery := fmt.Sprintf("INSERT INTO counts (fen, count) VALUES %s ON CONFLICT (fen) DO UPDATE SET count = counts.count + excluded.count", strings.Join(countValues, ", "))
+	bridgeQuery := fmt.Sprintf("INSERT INTO bridge (link, fen) VALUES %s", strings.Join(bridgeValues, ", "))
+
+	tx, err := db.Begin()
+	if err != nil {
+		fmt.Println("ON BEGIN")
+		log.Fatal(err)
+	}
+
+	_, err = tx.Exec(countQuery, countArgs...)
+	if err != nil {
+		tx.Rollback()
+		fmt.Println("ON COUNTS EXEC")
+		log.Fatal(err)
+	}
+
+	_, err = tx.Exec(bridgeQuery, bridgeArgs...)
+	if err != nil {
+		tx.Rollback()
+		fmt.Println("ON BRIDGE EXEC")
+		log.Fatal(err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		tx.Rollback()
+		fmt.Println("ON COMMIT EXEC")
+		log.Fatal(err)
 	}
 }
 

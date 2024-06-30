@@ -48,7 +48,7 @@ def removeMoveClocks(fen):
     elements = fen.split()
     return ' '.join(elements[:4])
 
-def gen_fen(game, color, pgn):
+def gen_fen(game, color):
     board = chess.Board()
     group = []
 
@@ -61,7 +61,7 @@ def gen_fen(game, color, pgn):
             if return_fen() and board.ply() > 1:
                 group.append(removeMoveClocks(board.fen()))
         except chess.IllegalMoveError:
-            print(f"Illegal move found for white: {move.white} (pgn: {pgn})")
+            print(f"Illegal move found for white: {move.white}")
 
         if move.black != '':
             try:
@@ -69,31 +69,37 @@ def gen_fen(game, color, pgn):
                 if return_fen():
                     group.append(removeMoveClocks(board.fen()))
             except chess.IllegalMoveError:
-                print(f"Illegal move found for black: {move.black} (pgn: {pgn})")
+                print(f"Illegal move found for black: {move.black}")
 
     board.reset()
     return group
 
 
 def counting_fens(data):
-    pgn = data['pgn']
-    color = data['color']
-    counts = Counter()
-    counted = {'counts': []}
+    fen_data = {}
 
-    # moves = extract_moves(pgn)
-    # fens = gen_fen(moves, False)
+    for game in data['games']:
+        pgn = game['pgn']
+        color = game['color']
+        urls = [game['url']]
+        fens = gen_fen(extract_moves(pgn), color)
 
-    ####### NEEEEEEEEEEED RULES TO AVOID CHESS960
+        for fen in fens:
+            if fen in fen_data:
+                # Update count and append the URL if it's not already included
+                fen_data[fen]['count'] += 1
+                if game['url'] not in fen_data[fen]['urls']:
+                    fen_data[fen]['urls'].append(game['url'])
+            else:
+                # Initialize for new FEN entries
+                fen_data[fen] = {'fen': fen, 'count': 1, 'urls': urls}
 
-    counts.update(gen_fen(extract_moves(pgn), color, data['pgn']))
+    # Prepare the output format
+    counts_list = [{'fen': key, 'count': value['count'], 'urls': value['urls']} for key, value in fen_data.items()]
+    return {'counts': counts_list}
+    
 
-    for position in counts:
-        counted['counts'].append({'fen': position, 'count': counts[position]})
-
-    return counted
-
-r =  sys.argv[1]
+r =  sys.stdin.read()
 
 data = json.loads(r)
 
