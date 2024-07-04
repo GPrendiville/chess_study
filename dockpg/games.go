@@ -10,7 +10,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"strings"
+	"sync"
 )
 
 var url string
@@ -23,7 +23,6 @@ var fen string
 var myresult string
 var oppresult string
 var accuracy float64
-var initial string
 
 type AddedGames struct {
 	Games []AddedGame `json:"games"`
@@ -36,9 +35,16 @@ type AddedGame struct {
 }
 
 type ToPython struct {
-	Pgn   string `json:"pgn"`
-	Color bool   `json:"color"`
-	// Url string `json:"url"`
+	Url         string
+	Pgn         string
+	TimeControl string
+	MyRating    int
+	OppRating   int
+	Color       bool
+	Fen         string
+	MyResult    string
+	OppResult   string
+	Accuracy    float64
 }
 
 type Counts struct {
@@ -54,81 +60,99 @@ type FenCount struct {
 func AddNewGames(db *sql.DB, months []string) int {
 	defer helpers.Duration(helpers.Track("AddNewGame"))
 
-	addedGamesCount := 0
-	lastGame := getLastGame(db)
+	var gamesForFenGen AddedGames
+	var addedGamesCount int
+
+	results := make(chan AddedGame)
+	done := make(chan bool)
+	ch := make(chan ToPython, 10) // Buffered channel
+
+	var wg sync.WaitGroup
+
+	// Start consumer goroutine
+	go func() {
+		for result := range results {
+			fmt.Println(len(gamesForFenGen.Games))
+			gamesForFenGen.Games = append(gamesForFenGen.Games, result)
+			addedGamesCount++
+		}
+		done <- true
+	}()
+
+	// Start producer goroutines
+	for i := 0; i < 5; i++ {
+		fmt.Printf("Producer: %d\n", i)
+		wg.Add(1)
+		go gameRoutines(db, results, ch, &wg)
+	}
 
 	for monthEntry := range months {
+		fmt.Printf("Archives: %s", months[monthEntry])
 		games := chesscom.PingMonth(months[monthEntry]).Games
-		// fmt.Printf("url: %s\nNum of games: %d\n\n", months[monthEntry], len(games))
-		currentIndex := len(games) - 1
-		currentGame := games[currentIndex]
-		gamesForFenGen := AddedGames{[]AddedGame{}}
 
-		for currentGame.URL != lastGame {
-			url = currentGame.URL
-			pgn = currentGame.PGN
-			timecontrol = currentGame.TimeControl
-			fen = currentGame.FEN
-			color = determineColor(currentGame)
-			initial = currentGame.Initial
+		for _, game := range games {
 
-			if color {
-				myrating = currentGame.White.Rating
-				opprating = currentGame.Black.Rating
-				myresult = currentGame.White.Result
-				oppresult = currentGame.Black.Result
-				accuracy = currentGame.Accuracies.White
-			} else {
-				myrating = currentGame.Black.Rating
-				opprating = currentGame.White.Rating
-				myresult = currentGame.Black.Result
-				oppresult = currentGame.White.Result
-				accuracy = currentGame.Accuracies.Black
-			}
+			if game.Initial == "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" {
+				url = game.URL
+				pgn = game.PGN
+				timecontrol = game.TimeControl
+				fen = game.FEN
+				color = determineColor(game)
 
-			if initial == "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" {
-				game := insertGame(db, url, pgn, timecontrol, myrating, opprating, color, fen, myresult, oppresult, accuracy)
-
-				if game.Url != "" && game.Pgn != "" {
-					addedGamesCount++
-
-					gamesForFenGen.Games = append(gamesForFenGen.Games, game)
-
+				if color {
+					myrating = game.White.Rating
+					opprating = game.Black.Rating
+					myresult = game.White.Result
+					oppresult = game.Black.Result
+					accuracy = game.Accuracies.White
+				} else {
+					myrating = game.Black.Rating
+					opprating = game.White.Rating
+					myresult = game.Black.Result
+					oppresult = game.White.Result
+					accuracy = game.Accuracies.Black
 				}
+
+				ch <- ToPython{url, pgn, timecontrol, myrating, opprating, color, fen, myresult, oppresult, accuracy}
 			}
-			currentIndex = currentIndex - 1
-			if currentIndex < 0 {
-				break
-			}
-			currentGame = games[currentIndex]
+
 		}
-
-		args, _ := json.Marshal(gamesForFenGen)
-
-		cmd := exec.Command("python3", "fenpy/compute.py")
-		stdinPipe, err := cmd.StdinPipe()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		go func() {
-			defer stdinPipe.Close()
-			io.WriteString(stdinPipe, string(args)) // `data` is the byte slice
-		}()
-
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			log.Fatalf("Command execution failed: %s\nOutput: %s", err, out)
-		}
-
-		var responseObj Counts
-		if err := json.Unmarshal(out, &responseObj); err != nil {
-			log.Fatalf("Failed to unmarshal JSON: %s\nJSON: %s", err, out)
-		}
-
-		pythonToFenAndBridge(db, responseObj.Counts)
-
 	}
+	close(ch)
+	fmt.Println("Closed reciever channel")
+	wg.Wait()
+	fmt.Println("Wait group clear")
+
+	close(results)
+	fmt.Println("Closed results channel")
+	<-done
+
+	args, _ := json.Marshal(gamesForFenGen)
+	fmt.Println("Games marshalled")
+
+	cmd := exec.Command("python3", "fenpy/compute.py")
+	stdinPipe, err := cmd.StdinPipe()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	go func() {
+		defer stdinPipe.Close()
+		io.WriteString(stdinPipe, string(args)) // `data` is the byte slice
+	}()
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Fatalf("Command execution failed: %s\nOutput: %s", err, out)
+	}
+
+	var responseObj Counts
+	if err := json.Unmarshal(out, &responseObj); err != nil {
+		log.Fatalf("Failed to unmarshal JSON: %s\nJSON: %s", err, out)
+	}
+
+	pythonToFenAndBridge(db, responseObj.Counts)
+
 	return addedGamesCount
 }
 
@@ -136,105 +160,16 @@ func determineColor(game chesscom.Game) bool {
 	return game.White.Username == os.Getenv("USERNAME")
 }
 
-func pythonToFenAndBridge(db *sql.DB, data []FenCount) {
-	const maxParams = 65535
+func gameRoutines(db *sql.DB, results chan<- AddedGame, ch <-chan ToPython, wg *sync.WaitGroup) {
 
-	var countValues []string
-	var countArgs []interface{}
-	var bridgeValues []string
-	var bridgeArgs []interface{}
-	countIdx, bridgeIdx := 1, 1
+	defer wg.Done() // Ensures that wg.Done is called when this goroutine finishes
 
-	for _, entry := range data {
-		if len(countArgs)+len(bridgeArgs)+len(entry.Urls)*2+2 > maxParams {
-			// Execute batch
-			executeBatch(db, countValues, countArgs, bridgeValues, bridgeArgs)
-			countValues, countArgs, bridgeValues, bridgeArgs = nil, nil, nil, nil
-			countIdx, bridgeIdx = 1, 1
-		}
-
-		// Append data for counts
-		countValues = append(countValues, fmt.Sprintf("($%d, $%d)", countIdx, countIdx+1))
-		countArgs = append(countArgs, entry.Fen, entry.Count)
-		countIdx += 2
-
-		// Handle multiple URLs for each FEN
-		for _, url := range entry.Urls {
-			bridgeValues = append(bridgeValues, fmt.Sprintf("($%d, $%d)", bridgeIdx, bridgeIdx+1))
-			bridgeArgs = append(bridgeArgs, url, entry.Fen)
-			bridgeIdx += 2
+	for game := range ch { // Continuously read from channel until it's closed
+		result := insertGame(db, game.Url, game.Pgn, game.TimeControl, game.MyRating, game.OppRating, game.Color, game.Fen, game.MyResult, game.OppResult, game.Accuracy)
+		if result.Url != "" && result.Pgn != "" {
+			results <- result // Send valid results to the results channel
 		}
 	}
-
-	if len(countArgs) > 0 || len(bridgeArgs) > 0 {
-		executeBatch(db, countValues, countArgs, bridgeValues, bridgeArgs)
-	}
-}
-
-func executeBatch(db *sql.DB, countValues []string, countArgs []interface{}, bridgeValues []string, bridgeArgs []interface{}) {
-
-	countQuery := fmt.Sprintf("INSERT INTO counts (fen, count) VALUES %s ON CONFLICT (fen) DO UPDATE SET count = counts.count + excluded.count", strings.Join(countValues, ", "))
-	bridgeQuery := fmt.Sprintf("INSERT INTO bridge (link, fen) VALUES %s", strings.Join(bridgeValues, ", "))
-
-	tx, err := db.Begin()
-	if err != nil {
-		fmt.Println("ON BEGIN")
-		log.Fatal(err)
-	}
-
-	_, err = tx.Exec(countQuery, countArgs...)
-	if err != nil {
-		tx.Rollback()
-		fmt.Println("ON COUNTS EXEC")
-		log.Fatal(err)
-	}
-
-	_, err = tx.Exec(bridgeQuery, bridgeArgs...)
-	if err != nil {
-		tx.Rollback()
-		fmt.Println("ON BRIDGE EXEC")
-		log.Fatal(err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		tx.Rollback()
-		fmt.Println("ON COMMIT EXEC")
-		log.Fatal(err)
-	}
-}
-
-func getLastGame(db *sql.DB) string {
-	var url string
-
-	if !checkGameTable(db) {
-		return "NONE"
-	}
-
-	lastEndpointQuery := `SELECT url
-		FROM games
-		ORDER BY id DESC
-		LIMIT 1`
-
-	err := db.QueryRow(lastEndpointQuery).Scan(&url)
-	if err != nil {
-		fmt.Println("GET LAST GAME ERROR")
-		log.Fatal(err)
-	}
-
-	return url
-}
-
-func checkGameTable(db *sql.DB) bool {
-	var check bool
-	query := `SELECT EXISTS(SELECT 1 FROM games)`
-
-	err := db.QueryRow(query).Scan(&check)
-	if err != nil {
-		fmt.Println("CHECK GAMES TABLE ERROR")
-		log.Fatal(err)
-	}
-
-	return check
 }
 
 func insertGame(db *sql.DB, url string, pgn string, timecontrol string, myrating int, opprating int, color bool, fen string, myresult string, oppresult string, accuracy float64) AddedGame {
@@ -248,6 +183,7 @@ func insertGame(db *sql.DB, url string, pgn string, timecontrol string, myrating
 	err := row.Scan(&ourl, &opgn, &ocolor)
 
 	if err != nil {
+		fmt.Println(err, " INSERT ERROR")
 		return AddedGame{"", "", false}
 	}
 
