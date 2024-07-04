@@ -8,6 +8,7 @@ import (
 	"strings"
 )
 
+// MODELS FOR GET METHODS
 type TotalArchives struct {
 	Archives []Archive `json:"archives"`
 }
@@ -23,6 +24,7 @@ type Overview struct {
 	Positions int `json:"positions"`
 }
 
+// CURRENT ROOT ENDPOINT THAT GETS COUNTS OF ARCHIVES(MONTHS), GAMES, AND POSITONS PLAYED IN
 func (db *Database) GetCounts(w http.ResponseWriter, r *http.Request) {
 	var months int
 	var games int
@@ -62,6 +64,7 @@ func (db *Database) GetCounts(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// GET ALL ARCHIVES
 func (db *Database) GetArchives(w http.ResponseWriter, r *http.Request) {
 	archives := TotalArchives{Archives: []Archive{}}
 

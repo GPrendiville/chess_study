@@ -6,6 +6,7 @@ import (
 	"os"
 )
 
+// CREATE AND TEST CONNECTION TO DATABASE
 func Connection() *sql.DB {
 	connect := os.Getenv("POSTGRES_CONNECT")
 

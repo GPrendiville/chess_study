@@ -9,6 +9,7 @@ import (
 	"os"
 )
 
+// GET ALL AVAILABLE ARCHIVES OF PLAYER AND UNPACK INTO GOLANG MODEL
 func PingArchive() EndpointArchive {
 	url := "https://api.chess.com/pub/player/" + os.Getenv("USERNAME") + "/games/archives"
 	response, err := http.Get(url)
@@ -28,6 +29,7 @@ func PingArchive() EndpointArchive {
 	return responseObject
 }
 
+// GET GAMES FROM ARCHIVE ENDPOINT AND UNPACK INTO GOLANG MODEL
 func PingMonth(endpoint string) GamesFromMonth {
 	response, err := http.Get(endpoint)
 	if err != nil {

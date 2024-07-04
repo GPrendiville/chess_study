@@ -7,6 +7,7 @@ import (
 	"strings"
 )
 
+// BUILD INSERT DATA TO INSERT IN BATCHES BASED ON PARAMETER SIZE
 func pythonToFenAndBridge(db *sql.DB, data []FenCount) {
 	const maxParams = 65535
 
@@ -18,18 +19,15 @@ func pythonToFenAndBridge(db *sql.DB, data []FenCount) {
 
 	for _, entry := range data {
 		if len(countArgs)+len(bridgeArgs)+len(entry.Urls)*2+2 > maxParams {
-			// Execute batch
 			executeBatch(db, countValues, countArgs, bridgeValues, bridgeArgs)
 			countValues, countArgs, bridgeValues, bridgeArgs = nil, nil, nil, nil
 			countIdx, bridgeIdx = 1, 1
 		}
 
-		// Append data for counts
 		countValues = append(countValues, fmt.Sprintf("($%d, $%d)", countIdx, countIdx+1))
 		countArgs = append(countArgs, entry.Fen, entry.Count)
 		countIdx += 2
 
-		// Handle multiple URLs for each FEN
 		for _, url := range entry.Urls {
 			bridgeValues = append(bridgeValues, fmt.Sprintf("($%d, $%d)", bridgeIdx, bridgeIdx+1))
 			bridgeArgs = append(bridgeArgs, url, entry.Fen)
@@ -42,8 +40,8 @@ func pythonToFenAndBridge(db *sql.DB, data []FenCount) {
 	}
 }
 
+// EXECUTE BATCHES IN TRANSACTION FROM BUILT QUERIES
 func executeBatch(db *sql.DB, countValues []string, countArgs []interface{}, bridgeValues []string, bridgeArgs []interface{}) {
-
 	countQuery := fmt.Sprintf("INSERT INTO counts (fen, count) VALUES %s ON CONFLICT (fen) DO UPDATE SET count = counts.count + excluded.count", strings.Join(countValues, ", "))
 	bridgeQuery := fmt.Sprintf("INSERT INTO bridge (link, fen) VALUES %s", strings.Join(bridgeValues, ", "))
 

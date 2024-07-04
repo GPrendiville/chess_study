@@ -1,5 +1,6 @@
 package chesscom
 
+// MODELS FOR CHESS.COM API RESPONSE
 type EndpointArchive struct {
 	Endpoints []string `json:"archives"`
 }

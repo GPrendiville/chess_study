@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from collections import Counter
 import sys
 
-
+# DATACLASSES FOR HANDLING MOVES AND EACH GAME
 @dataclass
 class Move():
     white: str
@@ -20,7 +20,7 @@ class Game():
     pgn: str
     color: bool
 
-
+# RETURN MOVE OBJECT FROM PGN SNIPPET
 def string_to_move(move_string):
     try:
         white, black = move_string.strip().split()
@@ -28,7 +28,7 @@ def string_to_move(move_string):
     except:
         return Move(move_string.strip())
 
-
+# CLEAN AND POLISH PGN TO ONLY NECESSARY INFORMATION
 def extract_moves(pgn):
     pgn_body = pgn.split('\n\n', 1)[1]
 
@@ -44,10 +44,12 @@ def extract_moves(pgn):
 
     return [moves_arrs, list_of_moves, pgn_cleaned]
 
+# REMOVE HALF MOVE CLOCK AND MOVE COUNT
 def removeMoveClocks(fen):
     elements = fen.split()
     return ' '.join(elements[:4])
 
+# GENERATE FENs FROM PGN
 def gen_fen(game, color):
     board = chess.Board()
     group = []
@@ -74,7 +76,7 @@ def gen_fen(game, color):
     board.reset()
     return group
 
-
+# TURN PGN INTO GROUP OF FENS AND ADD TO LIST/UPDATE COUNT AND APPEND URL OF GAME
 def counting_fens(data):
     fen_data = {}
 
@@ -86,15 +88,12 @@ def counting_fens(data):
 
         for fen in fens:
             if fen in fen_data:
-                # Update count and append the URL if it's not already included
                 fen_data[fen]['count'] += 1
                 if game['url'] not in fen_data[fen]['urls']:
                     fen_data[fen]['urls'].append(game['url'])
             else:
-                # Initialize for new FEN entries
                 fen_data[fen] = {'fen': fen, 'count': 1, 'urls': urls}
 
-    # Prepare the output format
     counts_list = [{'fen': key, 'count': value['count'], 'urls': value['urls']} for key, value in fen_data.items()]
     return {'counts': counts_list}
     

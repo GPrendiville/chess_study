@@ -14,6 +14,7 @@ type APIServer struct {
 	db          *sql.DB
 }
 
+// CREATE SERVER WITH PORT AND DATABASE
 func NewServer(APIEndpoint string, db *sql.DB) *APIServer {
 	return &APIServer{
 		APIEndpoint: APIEndpoint,
@@ -21,6 +22,7 @@ func NewServer(APIEndpoint string, db *sql.DB) *APIServer {
 	}
 }
 
+// INSTANTIATE API AND ROUTES TO LISTEN TO PROVIDED PORT
 func (api *APIServer) InitalizeAPI() error {
 	router := http.NewServeMux()
 	db := &Database{

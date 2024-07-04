@@ -8,6 +8,7 @@ import (
 	"chess-study/chesscom"
 )
 
+// INSERT NEW ARCHIVES TO ARCHIVES TABLE AND RETURN ARCHIVE LIST INCLUDING LAST INSERTED ARCHIVE TO PROCESS ANY NEW GAMES
 func AddNewArchives(db *sql.DB, archives chesscom.EndpointArchive) []string {
 	var id int
 
@@ -26,6 +27,7 @@ func AddNewArchives(db *sql.DB, archives chesscom.EndpointArchive) []string {
 	return archives.Endpoints[id:]
 }
 
+// GET THE MOST RECENT ARCHIVE ENTRY FOR UPDATED GAME ARCHIVE
 func lastArchiveEntry(db *sql.DB) int {
 	var id int
 
@@ -43,6 +45,7 @@ func lastArchiveEntry(db *sql.DB) int {
 	return id
 }
 
+// INSERT ARCHIVE TO TABLE
 func insertEndpoint(db *sql.DB, endpoint string) {
 	query := `INSERT INTO archives (endpoint)
 		VALUES ($1)`
@@ -55,6 +58,7 @@ func insertEndpoint(db *sql.DB, endpoint string) {
 	_ = result
 }
 
+// CHECK IF ARCHIVE TABLE IS EMPTY
 func checkArchiveTable(db *sql.DB) bool {
 	var check bool
 	query := `SELECT EXISTS(SELECT 1 FROM archives)`

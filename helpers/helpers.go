@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+// FUNCTION TO AID IN TIMING CODE BLOCKS
+
 func Track(msg string) (string, time.Time) {
 	return msg, time.Now()
 }
